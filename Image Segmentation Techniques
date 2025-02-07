@@ -1,0 +1,66 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import io, color, filters, segmentation
+from skimage.segmentation import slic, watershed, quickshift
+from scipy import ndimage
+from sklearn.metrics import f1_score
+
+# Default paths for input and output images
+input_image_path = r"D:\Z Number Plate\IMAGES\1.jpg"
+output_image_path = r"D:\Z Number Plate\ENHANCED IMAGES\1.jpg"
+
+# Prompt user for the input and output image paths
+input_image_path = input(f"Enter the path of the input image (default: {input_image_path}): ") or input_image_path
+output_image_path = input(f"Enter the path for the output enhanced image (default: {output_image_path}): ") or output_image_path
+
+# Read the input image
+try:
+    image = io.imread(input_image_path)
+except FileNotFoundError:
+    print("Input image not found. Please provide a valid path.")
+    exit()
+
+# Convert to grayscale if the image is RGB
+if image.ndim == 3:
+    image = color.rgb2gray(image)
+
+# Ensure the image has the correct data type (uint8)
+image_noisy = (image * 255).astype(np.uint8)
+
+# Define a function to compute F1-score
+def compute_f1_score(segmented_img):
+    # Convert segmentation to binary
+    segmented_binary = segmented_img > filters.threshold_otsu(segmented_img)
+    # Flatten the images for f1_score computation
+    segmented_flat = segmented_binary.flatten()
+    # Randomly generate ground truth segmentation for demonstration
+    ground_truth_segmentation = np.random.randint(0, 2, segmented_flat.shape)
+    # Compute F1-score
+    return f1_score(ground_truth_segmentation, segmented_flat)
+
+# Define segmentation algorithms
+algorithms = {
+    'Thresholding': lambda img: img > filters.threshold_otsu(img),
+    'K-Means Clustering': lambda img: slic(color.gray2rgb(img), n_segments=100, compactness=10),
+    'Region Growing': lambda img: watershed(img, markers=ndimage.label(img > filters.threshold_otsu(img))[0], compactness=0.1),
+    'Edge-Based Segmentation': lambda img: filters.sobel(img),
+    'Quickshift': lambda img: quickshift(color.gray2rgb(img), kernel_size=3, max_dist=6, ratio=0.5),
+}
+
+# Display the original image
+plt.figure(figsize=(15, 3))
+plt.subplot(161), plt.imshow(image, cmap='gray'), plt.title('Original Image')
+
+# Apply each segmentation algorithm and display the results
+for i, (name, algorithm) in enumerate(algorithms.items(), start=2):
+    segmented_img = algorithm(image_noisy)
+    plt.subplot(1, len(algorithms) + 1, i), plt.imshow(segmented_img, cmap='viridis'), plt.title(f"{name}")
+    plt.text(0.5, -0.1, f"F1 Score: {compute_f1_score(segmented_img):.2f}", size=10, ha="center", transform=plt.gca().transAxes)
+
+# Display the noisy image
+plt.subplot(1, len(algorithms) + 1, len(algorithms) + 1), plt.imshow(image_noisy, cmap='gray'), plt.title('Noisy Image')
+
+# Adjust spacing between subplots
+plt.subplots_adjust(wspace=0.5)
+
+plt.show()
